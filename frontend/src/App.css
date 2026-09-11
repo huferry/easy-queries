@@ -1,0 +1,76 @@
+.query-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.result-body {
+  overflow: auto;
+}
+
+.top-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 17px;
+}
+
+.result-table td {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sql-info {
+  cursor: pointer;
+  color: var(--bs-secondary-color);
+  display: inline-flex;
+}
+
+.sql-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1050;
+  margin-top: 6px;
+  min-width: 320px;
+  max-width: 480px;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+
+.sql-popover pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.8rem;
+  color: var(--bs-body-color);
+}
+
+.copyable-cell {
+  cursor: pointer;
+}
+
+.copyable-cell:hover {
+  background-color: var(--bs-tertiary-bg);
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-header:hover {
+  background-color: var(--bs-tertiary-bg);
+}
+
+.app-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1100;
+  background: var(--bs-body-color);
+  color: var(--bs-body-bg);
+  padding: 10px 16px;
+  border-radius: 4px;
+}

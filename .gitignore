@@ -1,0 +1,17 @@
+# .NET
+backend/**/bin/
+backend/**/obj/
+backend/**/appsettings.Development.json
+
+# Query data (environment/instance-specific, contains customer/database-specific SQL)
+/data/
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+
+# Editor / OS
+.vs/
+*.user
+Thumbs.db
+*.log

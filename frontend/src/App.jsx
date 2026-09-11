@@ -30,7 +30,7 @@ function App() {
   const topScrollRef = useRef(null)
   const tableScrollRef = useRef(null)
 
-  const filterNames = queries.find((q) => q.name === selectedQuery)?.filters ?? []
+  const filters = queries.find((q) => q.name === selectedQuery)?.filters ?? []
 
   useEffect(() => {
     document.documentElement.setAttribute('data-bs-theme', theme)
@@ -99,6 +99,13 @@ function App() {
     navigator.clipboard
       .writeText(text)
       .then(() => showToast('Value copied'))
+      .catch(() => showToast('Copy failed'))
+  }
+
+  const handleCopySql = () => {
+    navigator.clipboard
+      .writeText(result?.sql ?? '')
+      .then(() => showToast('SQL statement copied'))
       .catch(() => showToast('Copy failed'))
   }
 
@@ -259,31 +266,39 @@ function App() {
                     </div>
                   </div>
                 </div>
-                {filterNames.map((filterName) => (
-                  <div className="row mb-2 gx-2 align-items-center" key={filterName}>
+                {filters.map((filter) => (
+                  <div className="row mb-2 gx-2 align-items-center" key={filter.name}>
                     <label
-                      htmlFor={`filter-${filterName}`}
+                      htmlFor={`filter-${filter.name}`}
                       className="col-5 col-form-label col-form-label-sm text-end"
                     >
-                      {filterName}
+                      {filter.name}
                     </label>
                     <div className="col-7">
                       <div className="input-group input-group-sm">
                         <input
-                          id={`filter-${filterName}`}
+                          id={`filter-${filter.name}`}
                           type="text"
                           className="form-control"
-                          value={filterValues[filterName] ?? ''}
+                          list={filter.options.length > 0 ? `filter-options-${filter.name}` : undefined}
+                          value={filterValues[filter.name] ?? ''}
                           onChange={(e) =>
-                            setFilterValues((prev) => ({ ...prev, [filterName]: e.target.value }))
+                            setFilterValues((prev) => ({ ...prev, [filter.name]: e.target.value }))
                           }
                         />
+                        {filter.options.length > 0 && (
+                          <datalist id={`filter-options-${filter.name}`}>
+                            {filter.options.map((option) => (
+                              <option key={option} value={option} />
+                            ))}
+                          </datalist>
+                        )}
                         <button
                           type="button"
                           className="btn btn-outline-secondary"
-                          aria-label={`Clear ${filterName}`}
+                          aria-label={`Clear ${filter.name}`}
                           onClick={() =>
-                            setFilterValues((prev) => ({ ...prev, [filterName]: '' }))
+                            setFilterValues((prev) => ({ ...prev, [filter.name]: '' }))
                           }
                         >
                           ×
@@ -324,7 +339,8 @@ function App() {
                     fill="currentColor"
                     viewBox="0 0 16 16"
                     role="img"
-                    aria-label="Show executed SQL"
+                    aria-label="Copy executed SQL to clipboard"
+                    onClick={handleCopySql}
                   >
                     <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" />
                   </svg>

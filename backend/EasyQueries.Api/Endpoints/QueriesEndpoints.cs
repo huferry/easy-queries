@@ -10,8 +10,12 @@ public static class QueriesEndpoints
         @"^\s*--\s*#(?<key>\w+)\s*:\s*(?<value>.*)$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex FilterPattern = new(
-        @"^\s*--\s*#\s*\[(?<name>[^\]]+)\]\s*\|\s*(?<clause>.*)$",
+    private static readonly Regex FilterPrefixPattern = new(
+        @"^\s*--\s*#\s*\[(?<name>[^\]]+)\]\s*\|(?<rest>.*)$",
+        RegexOptions.Compiled);
+
+    private static readonly Regex BracketedListPattern = new(
+        @"^\[(?<items>.*)\]$",
         RegexOptions.Compiled);
 
     private static readonly Regex NumericLiteralPattern = new(
@@ -28,14 +32,14 @@ public static class QueriesEndpoints
 
     public static void MapQueriesEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/queries", GetQueries)
+        app.MapGet("/api/queries", GetQueriesAsync)
             .WithName("GetQueries");
 
         app.MapPost("/api/queries/execute", ExecuteQueryAsync)
             .WithName("ExecuteQuery");
     }
 
-    private static IEnumerable<object> GetQueries(IConfiguration config, IWebHostEnvironment env, string? database)
+    private static async Task<IResult> GetQueriesAsync(IConfiguration config, IWebHostEnvironment env, string? database)
     {
         var queriesDir = Path.Combine(DataPaths.GetDataDirectory(env, config), "queries");
         var queries = LoadQueries(queriesDir);
@@ -47,12 +51,23 @@ public static class QueriesEndpoints
                 .ToList();
         }
 
-        return queries.Select(q => new
+        var result = new List<object>();
+        foreach (var q in queries)
         {
-            name = q.Name,
-            sql = q.Sql,
-            filters = q.Filters.Select(f => f.Name),
-        });
+            var filters = new List<object>();
+            foreach (var f in q.Filters)
+            {
+                var options = f.OptionsQuery is not null && !string.IsNullOrWhiteSpace(database)
+                    ? (await RunOptionsQueryAsync(f.OptionsQuery, database, config)).Select(o => o.Label).ToArray()
+                    : f.Options;
+
+                filters.Add(new { name = f.Name, options });
+            }
+
+            result.Add(new { name = q.Name, sql = q.Sql, filters });
+        }
+
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> ExecuteQueryAsync(
@@ -74,8 +89,6 @@ public static class QueriesEndpoints
             return Results.BadRequest(new { message = $"Query '{request.Name}' does not apply to database '{request.Database}'." });
         }
 
-        var sql = BuildSql(query, request.Filters, request.MaxResults);
-
         var connectionStringBuilder = new SqlConnectionStringBuilder(config.GetConnectionString("database"))
         {
             InitialCatalog = request.Database
@@ -83,6 +96,8 @@ public static class QueriesEndpoints
 
         try
         {
+            var sql = await BuildSqlAsync(query, request.Filters, request.MaxResults, request.Database, config);
+
             await using var connection = new SqlConnection(connectionStringBuilder.ConnectionString);
             await connection.OpenAsync();
 
@@ -115,7 +130,12 @@ public static class QueriesEndpoints
         }
     }
 
-    private static string BuildSql(QueryDefinition query, Dictionary<string, string>? requestedFilters, int? maxResults)
+    private static async Task<string> BuildSqlAsync(
+        QueryDefinition query,
+        Dictionary<string, string>? requestedFilters,
+        int? maxResults,
+        string database,
+        IConfiguration config)
     {
         var sql = StripDatabaseQualifier(query.Sql);
 
@@ -131,10 +151,27 @@ public static class QueriesEndpoints
 
         var filterValues = new Dictionary<string, string>(requestedFilters, StringComparer.OrdinalIgnoreCase);
 
-        var clauses = query.Filters
-            .Where(f => filterValues.TryGetValue(f.Name, out var value) && !string.IsNullOrWhiteSpace(value))
-            .Select(f => SubstitutePlaceholder(f.ClauseTemplate, f.Name, filterValues[f.Name]))
-            .ToList();
+        var clauses = new List<string>();
+        foreach (var f in query.Filters)
+        {
+            if (!filterValues.TryGetValue(f.Name, out var value) || string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            var resolvedValue = value;
+            if (f.OptionsQuery is not null)
+            {
+                var options = await RunOptionsQueryAsync(f.OptionsQuery, database, config);
+                var match = options.FirstOrDefault(o => string.Equals(o.Label, value, StringComparison.OrdinalIgnoreCase));
+                if (match.Label is not null)
+                {
+                    resolvedValue = match.Value;
+                }
+            }
+
+            clauses.Add(SubstitutePlaceholder(f.ClauseTemplate, f.Name, resolvedValue));
+        }
 
         if (clauses.Count == 0)
         {
@@ -143,6 +180,43 @@ public static class QueriesEndpoints
 
         var keyword = WherePattern.IsMatch(sql) ? "AND" : "WHERE";
         return $"{sql}\n{keyword} {string.Join(" AND ", clauses)}";
+    }
+
+    private static async Task<List<(string Value, string Label)>> RunOptionsQueryAsync(
+        string optionsQuery, string database, IConfiguration config)
+    {
+        // A broken options query (bad SQL, missing alias, wrong table for a given database, etc.)
+        // shouldn't take down the whole query list or block execution - the filter still works as
+        // a plain free-text field either way, it just won't offer suggestions.
+        try
+        {
+            var connectionStringBuilder = new SqlConnectionStringBuilder(config.GetConnectionString("database"))
+            {
+                InitialCatalog = database
+            };
+
+            await using var connection = new SqlConnection(connectionStringBuilder.ConnectionString);
+            await connection.OpenAsync();
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = StripDatabaseQualifier(optionsQuery);
+
+            await using var reader = await command.ExecuteReaderAsync();
+
+            var results = new List<(string, string)>();
+            while (await reader.ReadAsync())
+            {
+                var value = reader.IsDBNull(0) ? "" : Convert.ToString(reader.GetValue(0)) ?? "";
+                var label = reader.IsDBNull(1) ? "" : Convert.ToString(reader.GetValue(1)) ?? "";
+                results.Add((value, label));
+            }
+
+            return results;
+        }
+        catch (SqlException)
+        {
+            return [];
+        }
     }
 
     private static string SubstitutePlaceholder(string template, string paramName, string rawValue)
@@ -187,12 +261,36 @@ public static class QueriesEndpoints
 
         foreach (var line in File.ReadAllLines(file))
         {
-            var filterMatch = FilterPattern.Match(line);
+            var filterMatch = FilterPrefixPattern.Match(line);
             if (filterMatch.Success)
             {
+                var rest = filterMatch.Groups["rest"].Value;
+                var parts = rest.Split('|', 2);
+                var clause = parts[0].Trim();
+
+                string[] staticOptions = [];
+                string? optionsQuery = null;
+
+                if (parts.Length > 1)
+                {
+                    var optionsSpec = parts[1].Trim();
+                    var bracketMatch = BracketedListPattern.Match(optionsSpec);
+                    if (bracketMatch.Success)
+                    {
+                        staticOptions = bracketMatch.Groups["items"].Value
+                            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                    }
+                    else
+                    {
+                        optionsQuery = optionsSpec;
+                    }
+                }
+
                 filters.Add(new QueryFilter(
                     filterMatch.Groups["name"].Value.Trim(),
-                    filterMatch.Groups["clause"].Value.Trim()));
+                    clause,
+                    staticOptions,
+                    optionsQuery));
                 continue;
             }
 
@@ -226,7 +324,7 @@ public static class QueriesEndpoints
 
     private sealed record QueryDefinition(string Name, string Sql, List<string> DbPatterns, List<QueryFilter> Filters);
 
-    private sealed record QueryFilter(string Name, string ClauseTemplate);
+    private sealed record QueryFilter(string Name, string ClauseTemplate, string[] Options, string? OptionsQuery);
 
     public sealed record ExecuteQueryRequest(string Name, string Database, Dictionary<string, string>? Filters, int? MaxResults);
 }

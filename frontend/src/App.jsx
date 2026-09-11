@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
-const API_BASE = 'http://localhost:5052'
+const API_BASE = import.meta.env.DEV
+  ? 'http://localhost:5052'
+  : (import.meta.env.VITE_API_BASE_URL ?? '')
 
 const getInitialTheme = () => {
   const stored = localStorage.getItem('theme')

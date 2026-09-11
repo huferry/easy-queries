@@ -2,6 +2,7 @@
 backend/**/bin/
 backend/**/obj/
 backend/**/appsettings.Development.json
+backend/**/wwwroot/
 
 # Query data (environment/instance-specific, contains customer/database-specific SQL)
 /data/

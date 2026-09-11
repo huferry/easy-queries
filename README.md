@@ -116,3 +116,9 @@ npm run dev
 ```
 
 Open `http://localhost:5173` in your browser. Start the backend first (or before loading the page), since the frontend fetches from it on load.
+
+## Deployment
+
+The backend can also serve the frontend's built files itself (single-origin, no CORS) — see `install-single-origin.ps1` at the repo root for an automated IIS deployment that builds both projects, publishes the backend, sets up the query data folder, and configures IIS (application pool + site) for you. Run it as Administrator on the target server.
+
+For manual/alternative deployment options (a two-site CORS-based IIS setup, or using .NET Aspire / Azure Container Apps), see the [wiki](https://github.com/huferry/easy-queries/wiki).

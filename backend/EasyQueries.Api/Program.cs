@@ -24,6 +24,9 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors("Frontend");
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapQueriesEndpoints();
 app.MapDatabasesEndpoints();
 

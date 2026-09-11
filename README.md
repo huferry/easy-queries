@@ -51,7 +51,7 @@ By default the API looks for this folder two levels up from the backend project 
 A plain array of database names shown in the "Database" dropdown by default (`GET /api/databases` with `isFavorite=true`, the default):
 
 ```json
-["VXStart", "VX_SalesDemo_Ferry_Utomo"]
+["Starport", "Starport_Colony_Kepler"]
 ```
 
 #### Query files (`data/queries/*.sql`)
@@ -62,39 +62,40 @@ Each `.sql` file under `data/queries` becomes one entry in the query list. Metad
 - `-- #db: <pattern>` — which database name(s) this query applies to. Supports `*` as a wildcard, and can be repeated for multiple patterns. A query only shows up (and can only be executed) for databases matching one of these patterns.
 - `-- # [paramName] | <where-clause fragment>` — an optional filter. `paramName` becomes both the filter's label in the UI and the placeholder token you can use inside the clause fragment. Repeat this line once per filter.
 
-Example — `data/queries/idp-domeinen.sql`:
+Example — `data/queries/docked-ships.sql`:
 
 ```sql
--- #db: VXStart
--- #name: IDP Domeinen
+-- #db: Starport
+-- #name: Docked Ships
 SELECT TOP (1000) [Id]
-      ,[Domein]
-      ,[Type]
-      ,[SkinName]
-      ,[Disabled]
-  FROM [VXStart].[dbo].[tblIDPDomeinen]
--- # [domein] | domein like '[domein]%'
--- # [disabled] | disabled = [disabled]
--- # [skin] | SkinName = [skin]
+      ,[ShipName]
+      ,[Captain]
+      ,[HullStatus]
+      ,[Docked]
+  FROM [Starport].[dbo].[tblDockedShips]
+-- # [captain] | Captain like '[captain]%'
+-- # [docked] | Docked = [docked]
+-- # [hullStatus] | HullStatus = [hullStatus]
 ```
 
 Notes on writing filters:
 
 - Only filters the user actually fills in are applied; empty ones are skipped.
 - Multiple applied filters are combined with `AND`, and `WHERE` is added automatically (or `AND` if the query already has a `WHERE`).
-- Values are quoted automatically unless they're purely numeric, and single quotes in the value are always escaped — so it's safe to write a filter clause with or without literal quotes around the placeholder (e.g. `SkinName = [skin]` vs. `domein like '[domein]%'`, as shown above).
-- Any `[Database].` qualifier in front of a `[schema].[table]` reference (e.g. `[VXStart].[dbo].[tblIDPDomeinen]`) is stripped before execution, so the same query file can be reused across multiple databases matched by a wildcard `#db` pattern — it always runs against whichever database was selected in the UI.
+- Values are quoted automatically unless they're purely numeric, and single quotes in the value are always escaped — so it's safe to write a filter clause with or without literal quotes around the placeholder (e.g. `HullStatus = [hullStatus]` vs. `Captain like '[captain]%'`, as shown above).
+- Any `[Database].` qualifier in front of a `[schema].[table]` reference (e.g. `[Starport].[dbo].[tblDockedShips]`) is stripped before execution, so the same query file can be reused across multiple databases matched by a wildcard `#db` pattern — it always runs against whichever database was selected in the UI.
 - A `TOP (n)` clause is added or replaced automatically based on the "max results" field in the UI.
 
-A second example using a wildcard `#db` pattern so the same query works against several similarly-shaped databases — `data/queries/employer.sql`:
+A second example using a wildcard `#db` pattern so the same query works against several similarly-shaped databases — `data/queries/colonists.sql`:
 
 ```sql
--- #name: Employer
--- #db: VX_SalesDemo*
+-- #name: Colonists
+-- #db: Starport_Colony*
 
-SELECT [RefId]
-      ,[EmployerId]
-  FROM [VX_SalesDemo_Ferry_Utomo].[cx].[Employer]
+SELECT [ColonistId]
+      ,[FullName]
+  FROM [Starport_Colony_Kepler].[cx].[Colonist]
+-- # [fullName] | FullName like '[fullName]%'
 ```
 
 ## Running the application

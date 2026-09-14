@@ -26,6 +26,10 @@ public static class QueriesEndpoints
         @"\bWHERE\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    private static readonly Regex OrderByPattern = new(
+        @"\bORDER\s+BY\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly Regex SelectTopPattern = new(
         @"\A(\s*SELECT\s+)(TOP\s*\(\s*\d+\s*\)\s*)?",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -130,7 +134,7 @@ public static class QueriesEndpoints
         }
     }
 
-    private static async Task<string> BuildSqlAsync(
+    internal static async Task<string> BuildSqlAsync(
         QueryDefinition query,
         Dictionary<string, string>? requestedFilters,
         int? maxResults,
@@ -179,7 +183,15 @@ public static class QueriesEndpoints
         }
 
         var keyword = WherePattern.IsMatch(sql) ? "AND" : "WHERE";
-        return $"{sql}\n{keyword} {string.Join(" AND ", clauses)}";
+        var clause = $"{keyword} {string.Join(" AND ", clauses)}";
+
+        var orderByMatch = OrderByPattern.Match(sql);
+        if (orderByMatch.Success)
+        {
+            return $"{sql[..orderByMatch.Index]}{clause}\n{sql[orderByMatch.Index..]}";
+        }
+
+        return $"{sql}\n{clause}";
     }
 
     private static async Task<List<(string Value, string Label)>> RunOptionsQueryAsync(
@@ -219,7 +231,7 @@ public static class QueriesEndpoints
         }
     }
 
-    private static string SubstitutePlaceholder(string template, string paramName, string rawValue)
+    internal static string SubstitutePlaceholder(string template, string paramName, string rawValue)
     {
         var token = $"[{paramName}]";
         var index = template.IndexOf(token, StringComparison.OrdinalIgnoreCase);
@@ -244,15 +256,15 @@ public static class QueriesEndpoints
         return template[..index] + replacement + template[(index + token.Length)..];
     }
 
-    private static string StripDatabaseQualifier(string sql) =>
+    internal static string StripDatabaseQualifier(string sql) =>
         Regex.Replace(sql, @"\[[A-Za-z0-9_]+\]\.(?=\[[A-Za-z0-9_]+\]\.\[[A-Za-z0-9_]+\])", string.Empty);
 
-    private static List<QueryDefinition> LoadQueries(string queriesDir) =>
+    internal static List<QueryDefinition> LoadQueries(string queriesDir) =>
         Directory.GetFiles(queriesDir, "*.sql")
             .Select(ParseQueryFile)
             .ToList();
 
-    private static QueryDefinition ParseQueryFile(string file)
+    internal static QueryDefinition ParseQueryFile(string file)
     {
         var name = Path.GetFileNameWithoutExtension(file);
         var dbPatterns = new List<string>();
@@ -316,15 +328,15 @@ public static class QueriesEndpoints
         return new QueryDefinition(name, string.Join("\n", bodyLines).Trim(), dbPatterns, filters);
     }
 
-    private static bool MatchesDatabase(string pattern, string database)
+    internal static bool MatchesDatabase(string pattern, string database)
     {
         var regexPattern = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
         return Regex.IsMatch(database, regexPattern, RegexOptions.IgnoreCase);
     }
 
-    private sealed record QueryDefinition(string Name, string Sql, List<string> DbPatterns, List<QueryFilter> Filters);
+    internal sealed record QueryDefinition(string Name, string Sql, List<string> DbPatterns, List<QueryFilter> Filters);
 
-    private sealed record QueryFilter(string Name, string ClauseTemplate, string[] Options, string? OptionsQuery);
+    internal sealed record QueryFilter(string Name, string ClauseTemplate, string[] Options, string? OptionsQuery);
 
     public sealed record ExecuteQueryRequest(string Name, string Database, Dictionary<string, string>? Filters, int? MaxResults);
 }

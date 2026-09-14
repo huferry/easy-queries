@@ -3,6 +3,8 @@ backend/**/bin/
 backend/**/obj/
 backend/**/appsettings.Development.json
 backend/**/wwwroot/
+backend/**/TestResults/
+backend/**/coverage-report/
 
 # Query data (environment/instance-specific, contains customer/database-specific SQL)
 /data/

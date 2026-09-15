@@ -11,13 +11,23 @@ const getInitialTheme = () => {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+const getInitialFiltersByQuery = () => {
+  try {
+    return JSON.parse(localStorage.getItem('filtersByQuery') ?? '{}')
+  } catch {
+    return {}
+  }
+}
+
 function App() {
   const [theme, setTheme] = useState(getInitialTheme)
   const [databases, setDatabases] = useState([])
-  const [selectedDatabase, setSelectedDatabase] = useState('')
+  const [selectedDatabase, setSelectedDatabase] = useState(() => localStorage.getItem('lastDatabase') ?? '')
   const [queries, setQueries] = useState([])
-  const [selectedQuery, setSelectedQuery] = useState('')
+  const [selectedQuery, setSelectedQuery] = useState(() => localStorage.getItem('lastQuery') ?? '')
   const [filterValues, setFilterValues] = useState({})
+  const [filtersByQuery, setFiltersByQuery] = useState(getInitialFiltersByQuery)
+  const isInitialQueryLoad = useRef(true)
   const [maxResults, setMaxResults] = useState('500')
   const [result, setResult] = useState(null)
   const [sort, setSort] = useState({ columnIndex: null, direction: 'asc' })
@@ -38,6 +48,28 @@ function App() {
   }, [theme])
 
   const toggleTheme = () => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
+
+  useEffect(() => {
+    if (selectedDatabase) localStorage.setItem('lastDatabase', selectedDatabase)
+  }, [selectedDatabase])
+
+  useEffect(() => {
+    if (selectedQuery) localStorage.setItem('lastQuery', selectedQuery)
+  }, [selectedQuery])
+
+  const setFilterValue = (name, value) => {
+    setFilterValues((prev) => {
+      const next = { ...prev, [name]: value }
+      if (selectedQuery) {
+        setFiltersByQuery((prevAll) => {
+          const nextAll = { ...prevAll, [selectedQuery]: next }
+          localStorage.setItem('filtersByQuery', JSON.stringify(nextAll))
+          return nextAll
+        })
+      }
+      return next
+    })
+  }
 
   const sortedRows = useMemo(() => {
     if (!result) return []
@@ -94,17 +126,44 @@ function App() {
     toastTimeoutRef.current = setTimeout(() => setToastMessage(null), 2000)
   }
 
+  const copyToClipboard = (text) => {
+    if (navigator.clipboard?.writeText) {
+      return navigator.clipboard.writeText(text)
+    }
+
+    // navigator.clipboard is undefined outside secure contexts (e.g. plain HTTP); execCommand is
+    // deprecated but remains the only working fallback there.
+    return new Promise((resolve, reject) => {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      try {
+        if (document.execCommand('copy')) {
+          resolve()
+        } else {
+          reject(new Error('execCommand copy failed'))
+        }
+      } catch (err) {
+        reject(err)
+      } finally {
+        document.body.removeChild(textarea)
+      }
+    })
+  }
+
   const handleCopyCell = (cell) => {
     const text = cell === null ? '' : String(cell)
-    navigator.clipboard
-      .writeText(text)
+    copyToClipboard(text)
       .then(() => showToast('Value copied'))
       .catch(() => showToast('Copy failed'))
   }
 
   const handleCopySql = () => {
-    navigator.clipboard
-      .writeText(result?.sql ?? '')
+    copyToClipboard(result?.sql ?? '')
       .then(() => showToast('SQL statement copied'))
       .catch(() => showToast('Copy failed'))
   }
@@ -117,7 +176,7 @@ function App() {
       })
       .then((data) => {
         setDatabases(data)
-        setSelectedDatabase((current) => current || data[0] || '')
+        setSelectedDatabase((current) => (current && data.includes(current) ? current : data[0] || ''))
       })
       .catch((err) => setError(err.message))
   }, [])
@@ -137,15 +196,21 @@ function App() {
       })
       .then((data) => {
         setQueries(data)
-        setSelectedQuery('')
-        setFilterValues({})
+
+        const restoreInitial = isInitialQueryLoad.current
+        isInitialQueryLoad.current = false
+
+        const candidateQuery = restoreInitial ? localStorage.getItem('lastQuery') ?? '' : ''
+        const restoredQuery = candidateQuery && data.some((q) => q.name === candidateQuery) ? candidateQuery : ''
+        setSelectedQuery(restoredQuery)
+        setFilterValues(restoredQuery ? getInitialFiltersByQuery()[restoredQuery] ?? {} : {})
       })
       .catch((err) => setError(err.message))
   }, [selectedDatabase])
 
   const handleSelectQuery = (queryName) => {
     setSelectedQuery(queryName)
-    setFilterValues({})
+    setFilterValues(filtersByQuery[queryName] ?? {})
   }
 
   const handleExecute = () => {
@@ -282,9 +347,7 @@ function App() {
                           className="form-control"
                           list={filter.options.length > 0 ? `filter-options-${filter.name}` : undefined}
                           value={filterValues[filter.name] ?? ''}
-                          onChange={(e) =>
-                            setFilterValues((prev) => ({ ...prev, [filter.name]: e.target.value }))
-                          }
+                          onChange={(e) => setFilterValue(filter.name, e.target.value)}
                         />
                         {filter.options.length > 0 && (
                           <datalist id={`filter-options-${filter.name}`}>
@@ -297,9 +360,7 @@ function App() {
                           type="button"
                           className="btn btn-outline-secondary"
                           aria-label={`Clear ${filter.name}`}
-                          onClick={() =>
-                            setFilterValues((prev) => ({ ...prev, [filter.name]: '' }))
-                          }
+                          onClick={() => setFilterValue(filter.name, '')}
                         >
                           ×
                         </button>

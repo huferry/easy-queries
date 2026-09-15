@@ -74,3 +74,41 @@
   padding: 10px 16px;
   border-radius: 4px;
 }
+
+.spotlight-search {
+  position: fixed;
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, 90vw);
+  padding: 10px 14px;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 12px;
+  cursor: move;
+}
+
+.spotlight-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--bs-secondary-color);
+}
+
+.spotlight-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 1.15rem;
+  color: var(--bs-body-color);
+  cursor: text;
+}
+
+.spotlight-search .btn-close {
+  flex-shrink: 0;
+}

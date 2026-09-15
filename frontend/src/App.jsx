@@ -39,6 +39,10 @@ function App() {
   const [tableScrollWidth, setTableScrollWidth] = useState(0)
   const topScrollRef = useRef(null)
   const tableScrollRef = useRef(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const searchInputRef = useRef(null)
+  const searchBarRef = useRef(null)
 
   const filters = queries.find((q) => q.name === selectedQuery)?.filters ?? []
 
@@ -71,12 +75,75 @@ function App() {
     })
   }
 
-  const sortedRows = useMemo(() => {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && (e.code === 'Space' || e.key === ' ')) {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
+
+  const handleSearchClose = () => {
+    setSearchOpen(false)
+    setSearchQuery('')
+  }
+
+  const handleSearchDragStart = (e) => {
+    const bar = searchBarRef.current
+    if (!bar) return
+
+    const rect = bar.getBoundingClientRect()
+    bar.style.left = `${rect.left}px`
+    bar.style.top = `${rect.top}px`
+    bar.style.transform = 'none'
+
+    const offsetX = e.clientX - rect.left
+    const offsetY = e.clientY - rect.top
+
+    const handleDragMove = (moveEvent) => {
+      bar.style.left = `${moveEvent.clientX - offsetX}px`
+      bar.style.top = `${moveEvent.clientY - offsetY}px`
+    }
+    const handleDragEnd = () => {
+      window.removeEventListener('mousemove', handleDragMove)
+      window.removeEventListener('mouseup', handleDragEnd)
+    }
+
+    window.addEventListener('mousemove', handleDragMove)
+    window.addEventListener('mouseup', handleDragEnd)
+    e.preventDefault()
+  }
+
+  const searchKeywords = useMemo(
+    () => searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean),
+    [searchQuery]
+  )
+
+  const searchedRows = useMemo(() => {
     if (!result) return []
-    if (sort.columnIndex === null) return result.rows
+    if (searchKeywords.length === 0) return result.rows
+
+    return result.rows.filter((row) => {
+      const haystack = row
+        .map((cell) => (cell === null ? '' : String(cell)))
+        .join(' ')
+        .toLowerCase()
+      return searchKeywords.every((keyword) => haystack.includes(keyword))
+    })
+  }, [result, searchKeywords])
+
+  const sortedRows = useMemo(() => {
+    if (sort.columnIndex === null) return searchedRows
 
     const factor = sort.direction === 'asc' ? 1 : -1
-    return [...result.rows].sort((a, b) => {
+    return [...searchedRows].sort((a, b) => {
       const av = a[sort.columnIndex]
       const bv = b[sort.columnIndex]
       if (av === null && bv === null) return 0
@@ -86,7 +153,7 @@ function App() {
       if (av > bv) return 1 * factor
       return 0
     })
-  }, [result, sort])
+  }, [searchedRows, sort])
 
   const handleSort = (columnIndex) => {
     setSort((prev) => {
@@ -470,7 +537,9 @@ function App() {
                     </tbody>
                   </table>
                   {sortedRows.length === 0 && (
-                    <p className="text-muted">Query returned no rows.</p>
+                    <p className="text-muted">
+                      {searchKeywords.length > 0 ? 'No rows match your search.' : 'Query returned no rows.'}
+                    </p>
                   )}
                   </div>
                 </>
@@ -481,6 +550,45 @@ function App() {
       </div>
 
       {toastMessage && <div className="app-toast shadow">{toastMessage}</div>}
+
+      {searchOpen && (
+        <div
+          className="spotlight-search shadow-lg"
+          ref={searchBarRef}
+          onMouseDown={handleSearchDragStart}
+        >
+          <span className="spotlight-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              fill="currentColor"
+              viewBox="0 0 16 16"
+              role="img"
+              aria-hidden="true"
+            >
+              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0" />
+            </svg>
+          </span>
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="spotlight-input"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onMouseDown={(e) => e.stopPropagation()}
+            placeholder="Search results…"
+            aria-label="Search results"
+          />
+          <button
+            type="button"
+            className="btn-close"
+            aria-label="Close search"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={handleSearchClose}
+          />
+        </div>
+      )}
       </div>
     </div>
   )

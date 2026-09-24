@@ -235,6 +235,26 @@ function App() {
       .catch(() => showToast('Copy failed'))
   }
 
+  const escapeMarkdownCell = (cell) =>
+    cell === null ? '' : String(cell).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')
+
+  const buildMarkdownTable = (columns, rows) => {
+    const header = `| ${columns.map((column) => column.name).join(' | ')} |`
+    const divider = `| ${columns.map(() => '---').join(' | ')} |`
+    const body = rows
+      .map((row) => `| ${row.map(escapeMarkdownCell).join(' | ')} |`)
+      .join('\n')
+    return [header, divider, body].filter(Boolean).join('\n')
+  }
+
+  const handleExportMarkdown = () => {
+    if (!result) return
+    const markdown = buildMarkdownTable(result.columns, sortedRows)
+    copyToClipboard(markdown)
+      .then(() => showToast('Result copied as Markdown table'))
+      .catch(() => showToast('Copy failed'))
+  }
+
   useEffect(() => {
     fetch(`${API_BASE}/api/databases`)
       .then((res) => {
@@ -541,6 +561,22 @@ function App() {
                       {searchKeywords.length > 0 ? 'No rows match your search.' : 'Query returned no rows.'}
                     </p>
                   )}
+                  </div>
+                  <div className="d-flex justify-content-end mt-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      fill="currentColor"
+                      viewBox="0 0 16 16"
+                      role="img"
+                      className="export-icon"
+                      aria-label="Copy result as Markdown table"
+                      onClick={handleExportMarkdown}
+                    >
+                      <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z" />
+                      <path d="M7.646 11.354a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 9.793V1.5a.5.5 0 0 0-1 0v8.293L5.354 7.646a.5.5 0 1 0-.708.708z" />
+                    </svg>
                   </div>
                 </>
               )}

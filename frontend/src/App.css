@@ -26,6 +26,15 @@
   display: inline-flex;
 }
 
+.export-icon {
+  cursor: pointer;
+  color: var(--bs-secondary-color);
+}
+
+.export-icon:hover {
+  color: var(--bs-body-color);
+}
+
 .sql-popover {
   position: absolute;
   top: 100%;
